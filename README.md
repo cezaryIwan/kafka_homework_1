@@ -1,4 +1,4 @@
-### Setup Kafka environment
+### Setup Kafka environment (based on quick start guide from Kafka: https://kafka.apache.org/quickstart)
 
 # 1. Download and exctract Kafka
 # 2. Start the Kafka environment
