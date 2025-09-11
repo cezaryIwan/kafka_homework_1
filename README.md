@@ -80,3 +80,94 @@ Get-Content .\test.sink.txt
 Remove-Item -Recurse -Force .\data\kraft-combined-logs -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force .\logs -ErrorAction SilentlyContinue
 ```
+
+
+# Clickstream demo
+From now on I'm working with ubuntu, not windows as in previous part
+
+### 1. Install Kafka
+### 2. Verify that you have all remaining needed tools 
+### 3. Increase max_map_count
+```
+sudo sysctl -w vm.max_map_count=262144
+```
+### 4. Clone repository
+### 5. Download needed connectors
+```
+docker run --rm -v $PWD/confluent-hub-components:/usr/share/confluent-hub-components confluentinc/cp-kafka-connect:7.9.0 bash -c 'confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:10.0.2'
+docker run --rm -v $PWD/confluent-hub-components:/usr/share/confluent-hub-components confluentinc/cp-kafka-connect:7.9.0 bash -c 'confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.4.0'
+```
+### 6. Give full access to confluent-hub-components
+```
+chmod -R 777 confluent-hub-components/
+```
+### 7. Compose up
+```
+docker-compose up -d
+```
+### 8. Verify containers
+```
+docker-compose ps -a
+```
+### 9. Launch ksqlDB CLI
+```
+docker-compose exec ksqldb-cli ksql http://ksqldb-server:8088
+```
+### 10. Log topics
+```
+show topics;
+```
+### 11. Create connectors with scripts below
+```
+RUN SCRIPT '/scripts/create-connectors.sql';
+```
+### 12. Query sample data from every connector, to verify<br>
+```
+print clickstream_users limit 3;
+print clickstream_codes limit 3;
+print clickstream limit 3;
+```
+### 13. Check connectors on Confluent Control Center
+<img width="1519" height="810" alt="confluent_flow_screen" src="https://github.com/user-attachments/assets/b2ab32dc-81bd-4ce9-9d5e-ce6187289dea" /><br>
+### 14. Load data
+```
+RUN SCRIPT '/scripts/statements.sql';
+```
+### 15. Verify data
+<img width="1278" height="887" alt="confluent_ksql_screen" src="https://github.com/user-attachments/assets/632596e3-9216-46b4-b60a-58ac7f1588b4" /><br>
+<img width="1519" height="810" alt="confluent_flow_screen" src="https://github.com/user-attachments/assets/6dfb58a5-5313-406e-bdad-b241766dfd74" /><br>
+### 16. Set up the required Elasticsearch document mapping template<br>
+```
+docker-compose exec elasticsearch bash -c '/scripts/elastic-dynamic-template.sh'
+```
+### 17. Send the ksqlDB tables to Elasticsearch and Grafana<br>
+```
+docker-compose exec ksqldb-server bash -c '/scripts/ksql-tables-to-grafana.sh'
+```
+### 18. Load dashboard into Grafana<br>
+```
+docker-compose exec grafana bash -c '/scripts/clickstream-analysis-dashboard.sh'
+```
+<img width="1843" height="971" alt="grafana_screen" src="https://github.com/user-attachments/assets/cc3a1bac-0ab1-4bf4-8a47-fd3836c11fe3" /><br>
+<img width="1736" height="950" alt="confluent_screen" src="https://github.com/user-attachments/assets/95108ed8-fe63-4622-a554-8abe4f2b2e46" /><br>
+
+Might be that you reach capacity of disk space, especially when working with local vm, as I did in this scenario. Elasticsearch, in that case, will automatically set indexes to read-only. You will have to 
+increase disk space, and manualy set "read_only_allow_delete" var to "false":<br>
+```
+curl -XPUT "http://localhost:9200/_settings" -H 'Content-Type: application/json' -d'
+{
+  "index": {
+    "blocks": {
+      "read_only_allow_delete": "false"
+    }
+  }
+}'
+```
+### 19. Mimic user activity sessions with script below<br>
+```
+./sessionize-data.sh
+```
+### 20. Result in Grafana<br>
+<img width="1837" height="867" alt="grafana_user_sessions_screen" src="https://github.com/user-attachments/assets/2db6f2f8-f552-415d-8ee6-7dc06268f00f" /><br>
+
+
